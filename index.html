@@ -1,0 +1,275 @@
+<html>
+    <head>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+        <link href="jumbotron-narrow.css" rel="stylesheet">
+    </head>
+    <body>
+        <script>
+            $( document ).ready(function() {
+                var optionsym = null;
+                var stockprice = 0.00;
+                var grossvalue = 0.00;
+                var tax_liability = 0.00;
+
+                function populate_initial() {
+                    // Populates the form with some initial values, pulling from local storage if any are saved.
+                    localStorage.getItem("optionsym") !== null ? $("#optionsym").val(localStorage.getItem("optionsym")) : $("#optionsym").val("ETSY")
+                    localStorage.getItem("optionnum") !== null ? $("#optionnum").val(localStorage.getItem("optionnum")) : $("#optionnum").val(0)
+                    localStorage.getItem("strikeprice") !== null ? $("#strikeprice").val(localStorage.getItem("strikeprice")) : $("#strikeprice").val(0.00)
+                    localStorage.getItem("income") !== null ? $("#income").val(localStorage.getItem("income")) : $("#income").val(0.00)
+                    localStorage.getItem("taxstatus") !== null ? $("#taxstatus").val(localStorage.getItem("taxstatus")) : $("#taxstatus").val("single")
+
+                    // Set some variables we use later
+                    optionsym = $("#optionsym").val();
+                }
+
+                function getstockprice() {
+                    $.getJSON('https://finance.google.com/finance/info?client=ig&q=' + optionsym + '&callback=?',function(response){
+                        var stockInfo = response[0];
+                        stockprice = stockInfo.l;
+                        recalc();
+                    });
+                    $( "#stockchart" ).attr('src', 'https://www.google.com/finance/getchart?q=' + optionsym + '&p=1M');
+                }
+
+                function recalc() {
+                    var optionnum = $("#optionnum").val();
+                    var strikeprice = $("#strikeprice").val();
+                    var exercisecost = optionnum * strikeprice;
+                    grossvalue = (optionnum * stockprice) - exercisecost;
+                    $("#exercisecost").text('$' + exercisecost.toFixed(2));
+                    $("#grossvalue").text('$' + grossvalue.toFixed(2));
+                    calculatetax();
+                    $("#netvalue").text('$' +  (grossvalue - tax_liability).toFixed(2));
+                }
+
+                function calculatetax() {
+                    // Always set this back to zero before recalculating, otherwise we'll be starting from the previous
+                    // tax liability amount and adding/subtracting from it, and nothing will make sense!
+                    tax_liability = 0.00;
+                    var income = parseFloat($("#income").val());
+                    var tax_ranges = [];
+                    switch($("#taxstatus").val()) {
+                        case "single":
+                            tax_ranges = [{'from': 413200, 'percentage': 39.6},
+                                          {'from': 411501, 'percentage': 35},
+                                          {'from': 189301, 'percentage': 33},
+                                          {'from': 90751, 'percentage': 28},
+                                          {'from': 37451, 'percentage': 25},
+                                          {'from': 9226, 'percentage': 15},
+                                          {'from': 0, 'percentage': 10}]
+                            break;
+                        case "marriedjoint":
+                            tax_ranges = [{'from': 464850, 'percentage': 39.6},
+                                          {'from': 411501, 'percentage': 35},
+                                          {'from': 230451, 'percentage': 33},
+                                          {'from': 151201, 'percentage': 28},
+                                          {'from': 74901, 'percentage': 25},
+                                          {'from': 18451, 'percentage': 15},
+                                          {'from': 0, 'percentage': 10}]
+                            break;
+                        case "marriedsep":
+                            tax_ranges = [{'from': 232426, 'percentage': 39.6},
+                                          {'from': 205751, 'percentage': 35},
+                                          {'from': 115226, 'percentage': 33},
+                                          {'from': 75601, 'percentage': 28},
+                                          {'from': 37451, 'percentage': 25},
+                                          {'from': 9226, 'percentage': 15},
+                                          {'from': 0, 'percentage': 10}]
+                            break;
+                        case "headofhouse":
+                            tax_ranges = [{'from': 439001, 'percentage': 39.6},
+                                          {'from': 411501, 'percentage': 35},
+                                          {'from': 209851, 'percentage': 33},
+                                          {'from': 129601, 'percentage': 28},
+                                          {'from': 50201, 'percentage': 25},
+                                          {'from': 13151, 'percentage': 15},
+                                          {'from': 0, 'percentage': 10}]
+                            break;
+                    }
+                    // Work backwards through the tax brackets.
+                    // First see if we owe anything over the top tax bracket. Then the one below that, etc.
+                    taxable_amount = grossvalue;
+                    for (i = 0; i < tax_ranges.length; i++) {
+                        // In order to make the math work out, we have to change the tax brackets.
+                        // We have to deduct the annual income from the boundary where the tax bracket starts, which
+                        // will give us the new boundaries to calculate the tax owed on the stock sale.
+                        tax_threshold = tax_ranges[i].from - income;
+                        tax_percentage = tax_ranges[i].percentage/100;
+                        if (taxable_amount >= tax_threshold && tax_threshold >= 0) {
+                            taxable_amount_above_threshold = taxable_amount - tax_threshold;
+                            tax_liability = tax_liability + (taxable_amount_above_threshold * tax_percentage);
+                            taxable_amount = taxable_amount - taxable_amount_above_threshold;
+                        }
+                    }
+                    // Now do the same to calculate the tax owed from the stock sale, but use the highest tax bracket.
+                    // You might pay less tax, but I haven't figured out the math to combine this with income tax *yet*.
+                    $("#tax").text('$' + tax_liability.toFixed(2));
+                }
+
+                $("#optionsym").on({
+                    'change': function(){
+                        optionsym = $("#optionsym").val();
+                        getstockprice();
+                        localStorage.setItem("optionsym", document.getElementById("optionsym").value);
+                    }
+                });
+                $("#income").on({
+                    'focus': function(){
+                        if (this.value == '0') this.value='';
+                    },
+                    'blur': function(){
+                        if (this.value == '') this.value='0';
+                    },
+                    'change': function(){
+                        recalc();
+                        localStorage.setItem("income", document.getElementById("income").value);
+                    }
+                });
+                $("#taxstatus").on({
+                    'change': function(){
+                        recalc();
+                        localStorage.setItem("taxstatus", document.getElementById("taxstatus").value);
+                    }
+                });
+                $("#optionnum").on({
+                    'focus': function(){
+                        if (this.value == '0') this.value='';
+                    },
+                    'blur': function(){
+                        if (this.value == '') this.value='0';
+                    },
+                    'change': function(){
+                        recalc();
+                        localStorage.setItem("optionnum", document.getElementById("optionnum").value);
+                    }
+                });
+                $("#strikeprice").on({
+                    'focus': function(){
+                        if (this.value == '0.00') this.value='';
+                    },
+                    'blur': function(){
+                        if (this.value == '') this.value='0.00';
+                    },
+                    'change': function(){
+                        recalc();
+                        localStorage.setItem("strikeprice", document.getElementById("strikeprice").value);
+                    }
+                });
+
+                $("#playground_price").on({
+                    'focus': function(){
+                        if (this.value == '0.00') this.value='';
+                    },
+                    'blur': function(){
+                        if (this.value == '') this.value='0.00';
+                    },
+                    'change': function(){
+                        stockprice = $("#playground_price").val();
+                        recalc();
+                    }
+                });
+
+                // Get the stock price once the page is loaded and populate initial field values
+                populate_initial();
+                getstockprice();
+            });
+        </script>
+        <div class="container">
+            <div class="header clearfix">
+                <nav>
+                <ul class="nav nav-pills pull-right">
+                    <li role="presentation" class="active"><a href="#">Home</a></li>
+                    <li role="presentation"><a href="#">About</a></li>
+                    <li role="presentation"><a href="#">Contact</a></li>
+                </ul>
+                </nav>
+                <h3 class="text-muted">Stock option value calculator</h3>
+            </div>
+            <div class="jumbotron">
+                <h1>Calculate stock option values</h1>
+            </div>
+            <div class="row marketing">
+                <div class="col-lg-6">
+                    <h4>Stock price</h4>
+                    <img id="stockchart" src="#" alt="" />
+                    <table width="50%">
+                        <tr>
+                            <td><h4>Exercise cost</h4></td>
+                            <td align="right" id="exercisecost">$0.00</td>
+                        </tr>
+                        <tr>
+                            <td><h4>Gross value after exercising</h4></td>
+                            <td align="right" id="grossvalue">$0.00</td>
+                        </tr>
+                        <tr>
+                            <td><h4>Tax liability</h4></td>
+                            <td align="right" id="tax">$0.00</td>
+                        </tr>
+                        <tr>
+                            <td><h4>Net value</h4></td>
+                            <td align="right" id="netvalue">$0.00</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-lg-6">
+                    <h4>Stock option information</h4>
+                        <table width="75%">
+                            <tr>
+                                <td>Ticker symbol:</td>
+                                <td align="right"><input id="optionsym" type="text" size="6"></td>
+                            </tr>
+                            <tr>
+                                <td>Number of options:</td>
+                                <td align="right">
+                                    <input id="optionnum" type="text" size="6">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Strike price:</td>
+                                <td align="right">
+                                    $<input id="strikeprice" type="text" size="6">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Your annual income:</td>
+                                <td align="right">$<input id="income" type="text" size="6"></td>
+                            </tr>
+                            <tr>
+                                <td>Your tax filing status:</td>
+                                <td align="right">
+                                    <select id="taxstatus">
+                                        <option value="single">Single</option>
+                                        <option value="marriedjoint">Married filing jointly</option>
+                                        <option value="marriedsep">married filing separately</option>
+                                        <option value="headofhouse">Head of household</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <!--
+                            <tr>
+                                <td>NQSO</td>
+                                <td align="right"><input name="optiontype" value="nqso" type="radio"></td>
+                            </tr>
+                            <tr>
+                                <td>ISO</td>
+                                <td align="right"><input name="optiontype" value="iso" type="radio"></td>
+                            </tr>
+                            -->
+                        </table>
+                    <h4>Value playground</h4>
+                    <p>You can change the price of the stock here, and see how it impacts the value of your options.</p>
+                    <table width="75%">
+                        <tr>
+                            <td>Stock price:</td>
+                            <td align="right">$<input id="playground_price" size="7" value="0.00"></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
