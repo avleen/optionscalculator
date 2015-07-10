@@ -30,6 +30,7 @@
                     $.getJSON('https://finance.google.com/finance/info?client=ig&q=' + optionsym + '&callback=?',function(response){
                         var stockInfo = response[0];
                         stockprice = stockInfo.l;
+                        $("#currentprice").text('$' + stockprice);
                         recalc();
                     });
                     $( "#stockchart" ).attr('src', 'https://www.google.com/finance/getchart?q=' + optionsym + '&p=1M');
@@ -195,12 +196,40 @@
             </div>
             <div class="jumbotron">
                 <h1>Calculate stock option values</h1>
+                <p>This is a simple stock option value calculator. It runs
+                entirely in your browser and no data is sent back to this
+                website.</p>
+                <p>The calculator makes some assumptions to keep things
+                simple:</p>
+                <ul>
+                    <li>You have one option grant. You'll have to change the
+                    values to check the value of each grant if you have more
+                    than one.
+                    <li>We do not take AMT into account. A lot of people dealing
+                    with stock options run into AMT, and this calculator tries
+                    to suggest the highest amount of tax you might owe, but your
+                    personal circumstances could result in significantly more or
+                    less tax owed.
+                    <li>We don't take ISO benefits into account for tax
+                    purposes. If you have ISOs, we assume you want to exercise
+                    them all at once, rather than gain favorable treatment
+                    through long term capital gains.
+                </ul>
+                <h5>We are not lawyers, nor accountants, nor tax professionals.
+                    This calculator is simply a guide to you to let you see what
+                    your options may be worth. Always speak to a real tax
+                    professional and financial advisor before making financial
+                    decisions!
+                </h5>
             </div>
             <div class="row marketing">
                 <div class="col-lg-6">
-                    <h4>Stock price</h4>
                     <img id="stockchart" src="#" alt="" />
                     <table width="50%">
+                        <tr>
+                            <td><h4>Current stock price</h4></td>
+                            <td align="right" id="currentprice">$0.00</td>
+                        </tr>
                         <tr>
                             <td><h4>Exercise cost</h4></td>
                             <td align="right" id="exercisecost">$0.00</td>
